@@ -1,7 +1,8 @@
 // TODO
-// - I'd like to send a signal to a thread so it stops its loop.
-// - It should have a start and stop function.
-// - Probably achievable by creating a class / impl-struct
+// - [ ] I'd like to send a signal to a thread so it stops its loop.
+// - [ ] It should have a start and stop function.
+// - [✓] Probably achievable by creating a class / impl-struct
+//
 //   NOTE
 //     it appears that it's quite difficult to have a struct "wrap" a thread handle...
 //     I'm getting lifetime issues and I have not found an elegant notation yet.
@@ -16,21 +17,19 @@
 //     https://stackoverflow.com/questions/54058000/how-to-mutate-self-within-a-thread
 //
 // TODO
-// - I'd like to be able to control the rate of increase
-// - I'd like to be able to control the acceleration of increase
+// - [ ] I'd like to be able to control the rate of increase
+// - [ ] I'd like to be able to control the acceleration of increase
 //
 // TODO
-// - I'd like a way to structure a lot of threads.
-// - I'd like to be able to reference to them by name
-//   So not a vec and then reference by index.
-//   I want to be able to say <thread_name>.stop().
-//   There is no way to forEach over a struct. So what is a nice approach?
+// - [✓] I'd like a way to structure a lot of threads.
+// - [✓] I'd like to be able to reference to them by name
 
 // NOTE
 // We could use this approach to build some sort of movement engine
 // Setting servo positions with the read values.
 // The threads will be in control of movement speed, positions, etc.
 // The main loop will just "set" the PWM signals for all servos continuously
+// Is it overkill to use threads for that? Maybe. But it will teach me interesting stuff.
 
 use std::thread;
 use std::time::Duration;
@@ -90,19 +89,22 @@ impl YoloThread {
                 // NOTE drop() does nothing speacial. The function just takes ownership and thus the
                 // memory is freed after its scope ends.
                 drop(w);
-                // thread::sleep(Duration::from_millis(1));
+                thread::sleep(Duration::from_millis(10));
             }
         }));
     }
 }
 
 fn main() {
-    let mut yolo_thread = YoloThread::new();
-    yolo_thread.start();
+    let mut yolo_thread1 = YoloThread::new();
+    let mut yolo_thread2 = YoloThread::new();
+    yolo_thread1.start();
+    yolo_thread2.start();
 
     loop {
-        let val = yolo_thread.value.read().unwrap();
-        println!("val {}", val);
+        let val1 = yolo_thread1.value.read().unwrap();
+        let val2 = yolo_thread2.value.read().unwrap();
+        println!("vals {}, {}", val1, val2);
 
         thread::sleep(Duration::from_millis(1));
     }
