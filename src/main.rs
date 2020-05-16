@@ -54,15 +54,29 @@ impl YoloThread {
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn stop(&self) {
+        let mut alive = self.alive.lock().unwrap();
+        *alive = false;
+    }
 
-        // NOTE I think what the post mentions is that you could put all this in a struct wrapped
+    pub fn start(&self) {
+        let mut alive = self.alive.lock().unwrap();
+        *alive = true;
+    }
+
+    pub fn init(&mut self) {
+
+        // NOTE This is an ugly pattern...
+        // I think what the post mentions is that you could put all this in a struct wrapped
         // by ArcMut and then lock it
         let value = self.value.clone();
         let go_back = self.go_back.clone();
+        let alive = self.alive.clone();
 
         self.handle = Some( thread::spawn(move || {
             loop {
+                if *alive.lock().unwrap() == false { break; }
+
                 // NOTE that the lock is held until the end of the scope
                 // So if we sleep at the end. We will hold a write lock so no one can read for that
                 // duration.
@@ -98,6 +112,10 @@ impl YoloThread {
 fn main() {
     let mut yolo_thread1 = YoloThread::new();
     let mut yolo_thread2 = YoloThread::new();
+
+    yolo_thread1.init();
+    yolo_thread2.init();
+
     yolo_thread1.start();
     yolo_thread2.start();
 
@@ -105,6 +123,10 @@ fn main() {
         let val1 = yolo_thread1.value.read().unwrap();
         let val2 = yolo_thread2.value.read().unwrap();
         println!("vals {}, {}", val1, val2);
+
+        if *yolo_thread2.value.read().unwrap() == 255 {
+            yolo_thread2.stop();
+        }
 
         thread::sleep(Duration::from_millis(1));
     }
