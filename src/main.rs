@@ -24,6 +24,8 @@ fn spawn_thread (a_ref: Arc<RwLock<u8>>) -> Arc<RwLock<u8>> {
         writer(clone)
     });
 
+    // NOTE is there a nicer way to do this? It feels like we should be able to share more by
+    // reference, instead of returning the ownership to the caller like this.
     return a_ref
 }
 
