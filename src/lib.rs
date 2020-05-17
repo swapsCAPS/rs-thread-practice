@@ -76,6 +76,7 @@ impl YoloThread {
                 // NOTE drop() does nothing speacial. The function just takes ownership and thus the
                 // memory is freed after its scope ends.
                 drop(i);
+                drop(w);
                 thread::sleep(Duration::from_millis(10));
             }
         }));
