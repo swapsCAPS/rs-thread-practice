@@ -1,6 +1,6 @@
 // TODO
-// - [ ] I'd like to send a signal to a thread so it stops its loop.
-// - [ ] It should have a start and stop function.
+// - [-] I'd like to send a signal to a thread so it stops its loop. TODO needs nicer approach
+// - [✓] It should have a start and stop function.
 // - [✓] Probably achievable by creating a class / impl-struct
 //
 //   NOTE
@@ -16,6 +16,9 @@
 //     This post seems to have a nice solution!
 //     https://stackoverflow.com/questions/54058000/how-to-mutate-self-within-a-thread
 //
+//     sentry also has a nice post explaining the "inner" pattern:
+//     https://blog.sentry.io/2018/04/05/you-cant-rust-that
+//
 // TODO
 // - [ ] I'd like to be able to control the rate of increase
 // - [ ] I'd like to be able to control the acceleration of increase
@@ -29,7 +32,11 @@
 // Setting servo positions with the read values.
 // The threads will be in control of movement speed, positions, etc.
 // The main loop will just "set" the PWM signals for all servos continuously
-// Is it overkill to use threads for that? Maybe. But it will teach me interesting stuff.
+// Is it overkill to use threads for that? Probably. One could achieve the same with one loop at
+// the beginning of the loop you could check for input and then update values using elapsed time
+// and the given input. This way you could do acceleration, speed control etc.
+// I guess this is more an excersize in threading than anything else. Hey! It's called
+// rs-thread-practice right :D
 
 use std::thread;
 use std::time::Duration;
@@ -37,9 +44,13 @@ use std::sync::{Arc, RwLock, Mutex };
 
 type ArcMutex<T> = Arc<Mutex<T>>;
 
+struct YoloThreadInner {
+    alive: bool,
+    go_back: bool,
+}
+
 struct YoloThread {
-    alive: ArcMutex<bool>,
-    go_back: ArcMutex<bool>,
+    inner: ArcMutex<YoloThreadInner>,
     value: Arc<RwLock<u8>>,
     handle: Option<thread::JoinHandle<()>>,
 }
@@ -47,54 +58,56 @@ struct YoloThread {
 impl YoloThread {
     pub fn new() -> Self {
         YoloThread {
-            alive: Arc::new(Mutex::new(false)),
-            go_back: Arc::new(Mutex::new(false)),
+            // NOTE inner will be used internally
+            inner: Arc::new(Mutex::new(YoloThreadInner {
+                alive: false,
+                go_back: false,
+            })),
+            // NOTE value and handle are "public" values
+            // If we would put value inside inner, we would have to lock the whole inner just to
+            // read out one value. Might not be a big deal, but seems a bit ugly.
             value: Arc::new(RwLock::new(0)),
             handle: None
         }
     }
 
     pub fn stop(&self) {
-        let mut alive = self.alive.lock().unwrap();
-        *alive = false;
+        let mut i = self.inner.lock().unwrap();
+        i.alive = false;
     }
 
     pub fn start(&self) {
-        let mut alive = self.alive.lock().unwrap();
-        *alive = true;
+        let mut i = self.inner.lock().unwrap();
+        i.alive = true;
     }
 
     pub fn init(&mut self) {
 
-        // NOTE This is an ugly pattern...
-        // I think what the post mentions is that you could put all this in a struct wrapped
-        // by ArcMut and then lock it
+        let inner = self.inner.clone();
         let value = self.value.clone();
-        let go_back = self.go_back.clone();
-        let alive = self.alive.clone();
 
         self.handle = Some( thread::spawn(move || {
             loop {
-                if *alive.lock().unwrap() == false { break; }
+                let mut i = inner.lock().unwrap();
+                if i.alive == false { break; }
 
                 // NOTE that the lock is held until the end of the scope
                 // So if we sleep at the end. We will hold a write lock so no one can read for that
                 // duration.
                 // We can use a drop() to release the lock.
-
                 let mut w = value.write().unwrap();
 
-                let mut gb = go_back.lock().unwrap();
-
+                // TODO research why this deref is necessary here, but not for if i.alive at the
+                // start of the loop... bool is treated differently?
                 if *w >= 255 {
-                    *gb = true;
+                    i.go_back = true;
                 }
 
                 if *w == 0 {
-                    *gb = false;
+                    i.go_back = false;
                 }
 
-                if *gb {
+                if i.go_back {
                     *w -= 1;
                 } else {
                     *w += 1;
@@ -102,7 +115,7 @@ impl YoloThread {
 
                 // NOTE drop() does nothing speacial. The function just takes ownership and thus the
                 // memory is freed after its scope ends.
-                drop(w);
+                drop(i);
                 thread::sleep(Duration::from_millis(10));
             }
         }));
